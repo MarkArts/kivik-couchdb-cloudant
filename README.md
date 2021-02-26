@@ -5,9 +5,8 @@ This package provides a basic implementation of the
 ```golang
 
 import (
-	_ "github.com/go-kivik/couchdb/v4"
-	"github.com/go-kivik/kivik/v4"
-
+  _ "github.com/go-kivik/couchdb/v4"
+  "github.com/go-kivik/kivik/v4"
   iam "github.com/kivik-couchdb-cloudant/authenticator"
 )
 
