@@ -3,6 +3,7 @@ package iam
 import (
 	"encoding/json"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"net/url"
 	"time"
@@ -36,36 +37,41 @@ type iamToken struct {
 //	if err != nil {
 //		return nil, err
 //	}
-// ````
+// ```
 type IAMAuthenticator struct {
 	Username string
 	Password string
 
-	apiKey string
-	token  iamToken
+	apiKey          string
+	token           iamToken
+	stateRefreshing bool
 
 	transport http.RoundTripper
 }
 
 // RoundTrip implements http.RoundTripper which kivik couchdb recognizes and then calls this every request
+// When a refresh is needed this will trigger a token refresh which on failure will
+// throw a async panic and will clear the current token making the next request error on permissions
 func (iam *IAMAuthenticator) RoundTrip(req *http.Request) (*http.Response, error) {
-	// if the token expires in 5min or less get a new one
-	// TODO: on high requests this will cause a bunch of parallel token refreshes so somehow prevent that
-	if iam.token.Expiration-300 <= time.Now().Unix() {
-		token, err := getIAMToken(iam.apiKey)
-		if err != nil {
-			return nil, err
-		}
 
-		iam.token = token
+	// if the token expires in 5min or less start a go routine that refreshes the token
+	if iam.token.Expiration-300 <= time.Now().Unix() && iam.stateRefreshing != false {
+		go func() {
+			token, err := getIAMToken(iam.apiKey)
+			if err != nil {
+				log.Panic(err)
+			}
 
+			iam.token = token
+			iam.stateRefreshing = false
+		}()
 	}
 
 	req.Header.Add("Authorization", "Bearer "+iam.token.AccessToken)
 	return iam.transport.RoundTrip(req)
 }
 
-// This is copy pasted from the BasicAuth Authenticator that comes with kivik/CouchDB
+// Authenticate This is copy pasted from the BasicAuth Authenticator that comes with kivik/CouchDB
 func (iam *IAMAuthenticator) Authenticate(c *chttp.Client) error {
 	iam.transport = c.Transport
 	if iam.transport == nil {
