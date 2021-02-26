@@ -1,5 +1,5 @@
 # Kivik Couchdb Cloudant Authenticator
-This package provides a basic implementation of the
+This package provides a basic implementation of IBM IAM auhtenticationg for cloudant. 
 
 ## How to use
 ```golang
@@ -14,7 +14,7 @@ import (
 )
 
 func main() {
-	fmt.PrintLhn(setup("https://example.com", "iam APi token"))
+	fmt.PrintLhn(setup("https://example.com", "iam APi key"))
 }
 
 func setup(cloudantDSN string, apiKey string) error {
