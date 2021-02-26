@@ -3,32 +3,35 @@ This package provides a basic implementation of the
 
 ## How to use
 ```golang
+package main
 
 import (
-  _ "github.com/go-kivik/couchdb/v4"
-  "github.com/go-kivik/kivik/v4"
-  iam "github.com/MarkArts/kivik-couchdb-cloudant/authenticator"
+	"context"
+
+	iam "github.com/MarkArts/kivik-couchdb-cloudant/authenticator"
+	_ "github.com/go-kivik/couchdb/v4"
+	"github.com/go-kivik/kivik/v4"
 )
 
-func main(){
-  fmt.PrintLhn(setup())
+func main() {
+	fmt.PrintLhn(setup("https://example.com", "iam APi token"))
 }
 
-func setup() error {
-  client, err := kivik.New("couch", cloudantDSN)
-  if err != nil {
-    return nil, err
-  }
+func setup(cloudantDSN string, apiKey string) error {
+	client, err := kivik.New("couch", cloudantDSN)
+	if err != nil {
+		return nil, err
+	}
 
-  iamAuthenticator, err := iam.NewIAMAuthenticator(apiKey)
-  if err != nil {
-    return nil, err
-  }
+	iamAuthenticator, err := iam.NewIAMAuthenticator(apiKey)
+	if err != nil {
+		return nil, err
+	}
 
-  err = client.Authenticate(context.TODO(), iamAuthenticator)
-  if err != nil {
-    return nil, err
-  }
+	err = client.Authenticate(context.TODO(), iamAuthenticator)
+	if err != nil {
+		return nil, err
+	}
 }
 
 ```
