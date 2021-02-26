@@ -5,14 +5,14 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"sync"
 	"time"
 
 	"github.com/go-kivik/couchdb/v4/chttp"
 )
 
 const (
-	ibmIAMEndpoint = "https://iam.cloud.ibm.com/identity/token"
+	ibmIAMEndpoint            = "https://iam.cloud.ibm.com/identity/token"
+	refreshTokenCheckInterval = time.Minute * 5
 )
 
 type iamToken struct {
@@ -45,9 +45,6 @@ type IAMAuthenticator struct {
 	apiKey string
 	token  iamToken
 
-	stateRefreshing bool
-	callLock        sync.Mutex
-
 	transport http.RoundTripper
 }
 
@@ -55,31 +52,6 @@ type IAMAuthenticator struct {
 // When a refresh is needed this will trigger a token refresh which on failure will
 // throw a async panic and will clear the current token making the next request error on permissions
 func (iam *IAMAuthenticator) RoundTrip(req *http.Request) (*http.Response, error) {
-
-	// if the token is no longer valid we need to lock further requests until the token is refreshed
-	if iam.token.Expiration <= time.Now().Unix() {
-		iam.callLock.Lock()
-		defer iam.callLock.Unlock()
-
-		// prevent calls after a lock to get the token to
-		if iam.token.Expiration <= time.Now().Unix() {
-			err := iam.refreshToken()
-
-			// panic here as this is a non recoverable situation
-			panic(err)
-		}
-	}
-
-	// if the token expires in 5min or less start a go routine that refreshes the token
-	if iam.token.Expiration-300 <= time.Now().Unix() && iam.stateRefreshing != false {
-		go func() {
-			err := iam.refreshToken()
-			if err != nil {
-				panic(err)
-			}
-		}()
-	}
-
 	req.Header.Add("Authorization", "Bearer "+iam.token.AccessToken)
 	return iam.transport.RoundTrip(req)
 }
@@ -101,7 +73,6 @@ func (iam *IAMAuthenticator) refreshToken() error {
 	}
 
 	iam.token = token
-	iam.stateRefreshing = false
 
 	return nil
 }
@@ -113,10 +84,24 @@ func NewIAMAuthenticator(apiKey string) (*IAMAuthenticator, error) {
 		return nil, err
 	}
 
-	return &IAMAuthenticator{
+	iam := &IAMAuthenticator{
 		apiKey: apiKey,
 		token:  token,
-	}, nil
+	}
+
+	go func() {
+		for {
+			if iam.token.Expiration-300 <= time.Now().Unix() {
+				err := iam.refreshToken()
+				if err != nil {
+					panic(err)
+				}
+			}
+			time.Sleep(refreshTokenCheckInterval)
+		}
+	}()
+
+	return iam, nil
 }
 
 func getIAMToken(token string) (iamToken, error) {
