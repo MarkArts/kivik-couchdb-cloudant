@@ -14,24 +14,41 @@ const (
 	ibmIAMEndpoint = "https://iam.cloud.ibm.com/identity/token"
 )
 
-type IAMToken struct {
+type iamToken struct {
 	AccessToken string `json:"access_token"`
 	Expiration  int64  `json:"expiration"`
 }
 
+// IAMAuthenticator implements couchdb chttp Auhtenticator and allows kivik/couchdb to connect with cloudant
+// example:
+// ```
+//	client, err := kivik.New("couch", dsn)
+//	if err != nil {
+// 		return nil, err
+//	}
+//
+// 	iamAuthenticator, err := NewIAMAuthenticator(apiKey)
+// 	if err != nil {
+//		return nil, err
+// 	}
+//
+//	err = client.Authenticate(context.TODO(), iamAuthenticator)
+//	if err != nil {
+//		return nil, err
+//	}
+// ````
 type IAMAuthenticator struct {
 	Username string
 	Password string
 
 	apiKey string
-	token  IAMToken
+	token  iamToken
 
 	transport http.RoundTripper
 }
 
-// Apperently this makes it inplement http.RoundTripper which kivik couchdb recognizes and then calls this every request
+// RoundTrip implements http.RoundTripper which kivik couchdb recognizes and then calls this every request
 func (iam *IAMAuthenticator) RoundTrip(req *http.Request) (*http.Response, error) {
-
 	// if the token expires in 5min or less get a new one
 	// TODO: on high requests this will cause a bunch of parallel token refreshes so somehow prevent that
 	if iam.token.Expiration-300 <= time.Now().Unix() {
@@ -58,6 +75,7 @@ func (iam *IAMAuthenticator) Authenticate(c *chttp.Client) error {
 	return nil
 }
 
+// NewIAMAuthenticator return a IAMAuthenticator with a fetched token
 func NewIAMAuthenticator(apiKey string) (*IAMAuthenticator, error) {
 	token, err := getIAMToken(apiKey)
 	if err != nil {
@@ -70,8 +88,8 @@ func NewIAMAuthenticator(apiKey string) (*IAMAuthenticator, error) {
 	}, nil
 }
 
-func getIAMToken(token string) (IAMToken, error) {
-	iamToken := IAMToken{}
+func getIAMToken(token string) (iamToken, error) {
+	iamToken := iamToken{}
 
 	resp, err := http.PostForm(ibmIAMEndpoint,
 		url.Values{

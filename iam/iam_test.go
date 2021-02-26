@@ -11,7 +11,7 @@ import (
 func TestIAM(t *testing.T) {
 	iam := &IAMAuthenticator{
 		apiKey: "",
-		token:  IAMToken{},
+		token:  iamToken{},
 	}
 
 	t.Run("Test register", func(t *testing.T) {
