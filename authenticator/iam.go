@@ -3,9 +3,9 @@ package authenticator
 import (
 	"encoding/json"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
 
 	"github.com/go-kivik/couchdb/v4/chttp"
@@ -42,9 +42,11 @@ type IAMAuthenticator struct {
 	Username string
 	Password string
 
-	apiKey          string
-	token           iamToken
+	apiKey string
+	token  iamToken
+
 	stateRefreshing bool
+	callLock        sync.Mutex
 
 	transport http.RoundTripper
 }
@@ -54,16 +56,27 @@ type IAMAuthenticator struct {
 // throw a async panic and will clear the current token making the next request error on permissions
 func (iam *IAMAuthenticator) RoundTrip(req *http.Request) (*http.Response, error) {
 
+	// if the token is no longer valid we need to lock further requests until the token is refreshed
+	if iam.token.Expiration <= time.Now().Unix() {
+		iam.callLock.Lock()
+		defer iam.callLock.Unlock()
+
+		// prevent calls after a lock to get the token to
+		if iam.token.Expiration <= time.Now().Unix() {
+			err := iam.refreshToken()
+
+			// panic here as this is a non recoverable situation
+			panic(err)
+		}
+	}
+
 	// if the token expires in 5min or less start a go routine that refreshes the token
 	if iam.token.Expiration-300 <= time.Now().Unix() && iam.stateRefreshing != false {
 		go func() {
-			token, err := getIAMToken(iam.apiKey)
+			err := iam.refreshToken()
 			if err != nil {
-				log.Panic(err)
+				panic(err)
 			}
-
-			iam.token = token
-			iam.stateRefreshing = false
 		}()
 	}
 
@@ -78,6 +91,18 @@ func (iam *IAMAuthenticator) Authenticate(c *chttp.Client) error {
 		iam.transport = http.DefaultTransport
 	}
 	c.Transport = iam
+	return nil
+}
+
+func (iam *IAMAuthenticator) refreshToken() error {
+	token, err := getIAMToken(iam.apiKey)
+	if err != nil {
+		return err
+	}
+
+	iam.token = token
+	iam.stateRefreshing = false
+
 	return nil
 }
 
