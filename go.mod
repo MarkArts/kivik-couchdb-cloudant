@@ -1,4 +1,4 @@
-module github.com/kivik-couchdb-cloudant
+module github.com/MarkArts/kivik-couchdb-cloudant
 
 go 1.15
 
